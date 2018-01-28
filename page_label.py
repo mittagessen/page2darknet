@@ -3,9 +3,9 @@
 from lxml import etree
 import glob
 import os
-import shutil
 import uuid
-
+import numpy as np
+from PIL import Image
 from os import listdir, getcwd
 from os.path import join
 
@@ -60,11 +60,12 @@ for f in glob.iglob('data/**/*.xml', recursive=True):
         im = os.path.join(os.path.dirname(f), el.get('imageFilename'))
         w = int(el.get('imageWidth'))
         h = int(el.get('imageHeight'))
-        imf = 'out/images/{}.png'.format(fid)
-        shutil.copyfile(im, imf)
+        imf = 'out/images/{}.jpg'.format(fid)
+        Image.open(im).save(imf)
 
         lf = 'out/labels/{}.txt'.format(fid)
         with open(lf, 'w') as fo:
+            idx = 0
             for reg in el.findall('{*}TextRegion'):
                 if reg.get('type') not in classes:
                     cls = classes.index('paragraph')
@@ -73,10 +74,30 @@ for f in glob.iglob('data/**/*.xml', recursive=True):
                 for tl in reg.findall('{*}TextLine'):
                     coords = tl.find('{*}Coords').get('points')
                     fo.write('{} {} {} {} {}\n'.format(cls, *convert((w, h), mk_bbox(coords))))
+                    idx += 1
             cls = classes.index('image')
             for reg in el.findall('{*}ImageRegion'):
                 coords = reg.find('{*}Coords').get('points')
                 fo.write('{} {} {} {} {}\n'.format(cls, *convert((w, h), mk_bbox(coords))))
-        manifest.append(lf)
+                idx += 1
+        print('{} bboxes'.format(idx))
+        manifest.append(imf)
+
+np.random.shuffle(manifest)
 with open('train.txt', 'w') as fp:
-    fp.write('\n'.join(manifest))
+    fp.write('\n'.join(manifest[:-10]))
+
+with open('test.txt', 'w') as fp:
+    fp.write('\n'.join(manifest[-10:]))
+
+with open('seg.names', 'w') as fp:
+    fp.write('\n'.join(classes))
+
+wd = getcwd()
+
+with open('seg.data', 'w') as fp:
+    fp.write(('classes = {0}\n'
+              'train = {1}/train.txt\n'
+              'test = {1}/test.txt\n'
+              'names = {1}/seg.names\n'
+              'backup = backup').format(len(classes), wd))
